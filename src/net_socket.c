@@ -161,9 +161,14 @@ static int worker(void *argument)
         fd_set input, output;
         FD_ZERO(&input); FD_ZERO(&output);
         SDL_LockMutex(n->lock);
-        if (n->rx_count < QUEUE_SIZE) FD_SET(socket_fd,&input);
-        if (n->tx_count) FD_SET(socket_fd,&output);
+        bool want_input=n->rx_count < QUEUE_SIZE;
+        bool want_output=n->tx_count != 0;
+        if (want_input) FD_SET(socket_fd,&input);
+        if (want_output) FD_SET(socket_fd,&output);
         SDL_UnlockMutex(n->lock);
+        // Winsock rejects select with no descriptors. A full RX queue needs
+        // guest backpressure, not a synthetic connection failure.
+        if (!want_input && !want_output) { SDL_Delay(1); continue; }
         struct timeval wait = {0,1000};
         int ready = select((int)(socket_fd+1),&input,&output,NULL,&wait);
         if (cancelled(n,generation)) continue;

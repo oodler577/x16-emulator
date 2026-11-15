@@ -41,7 +41,10 @@ class Card:
     def receive(self,length):
         result=bytearray()
         for _ in range(length):
-            self.wait(lambda: self.read(5)&1)
+            try:
+                self.wait(lambda: self.read(5)&1)
+            except AssertionError as exc:
+                raise AssertionError(f"RX stalled after {len(result)}/{length} bytes; LSR={self.read(5):02x}, MSR={self.read(6):02x}") from exc
             result.append(self.read(0))
         return bytes(result)
     def command(self,data):

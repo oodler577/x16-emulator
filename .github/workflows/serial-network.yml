@@ -50,14 +50,12 @@ jobs:
       - name: Package
         run: |
           mkdir serial-network-linux
-          cp build/x16emu SERIAL-NETWORK.md serial-network-linux/
+          cp build/x16emu SERIAL-NETWORK.md build/*.tap serial-network-linux/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: serial-network-linux
-          path: |
-            serial-network-linux/*
-            build/*.tap
+          path: serial-network-linux/*
   windows:
     runs-on: windows-2022
     timeout-minutes: 20
@@ -97,7 +95,7 @@ jobs:
       - name: Package Windows executable and runtime DLLs
         run: |
           mkdir serial-network-windows
-          cp build/x16emu.exe SERIAL-NETWORK.md serial-network-windows/
+          cp build/x16emu.exe SERIAL-NETWORK.md build/*.tap serial-network-windows/
           cp /mingw64/bin/SDL2.dll /mingw64/bin/zlib1.dll serial-network-windows/
           for f in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
             if test -f "/mingw64/bin/$f"; then cp "/mingw64/bin/$f" serial-network-windows/; fi
@@ -106,6 +104,4 @@ jobs:
         if: always()
         with:
           name: serial-network-windows-x86_64
-          path: |
-            serial-network-windows/*
-            build/*.tap
+          path: serial-network-windows/*
