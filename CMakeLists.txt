@@ -231,15 +231,17 @@ if(USE_TRACE)
     target_compile_definitions(x16emu PRIVATE TRACE)
 endif()
 
+# SDL2main must precede SDL2 for MinGW single-pass static-library resolution.
+if(TARGET SDL2::SDL2main)
+    target_link_libraries(x16emu PRIVATE SDL2::SDL2main)
+endif()
+
 # Linking
 target_link_libraries(x16emu PRIVATE
     SDL2::SDL2
     ZLIB::ZLIB
 )
 
-if(TARGET SDL2::SDL2main)
-    target_link_libraries(x16emu PRIVATE SDL2::SDL2main)
-endif()
 
 if(USE_FLUIDSYNTH)
     add_compile_definitions(HAS_FLUIDSYNTH)
@@ -319,14 +321,15 @@ target_include_directories(makecart PRIVATE
     src/extern/include
     ${GIT_REV_HEADER_DIR}
 )
+if(TARGET SDL2::SDL2main)
+    target_link_libraries(makecart PRIVATE SDL2::SDL2main)
+endif()
+
 target_link_libraries(makecart PRIVATE
     ZLIB::ZLIB
     SDL2::SDL2
 )
 
-if(TARGET SDL2::SDL2main)
-    target_link_libraries(makecart PRIVATE SDL2::SDL2main)
-endif()
 
 if(EMSCRIPTEN)
     set_target_properties(makecart PROPERTIES SUFFIX ".html")
