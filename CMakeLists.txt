@@ -201,6 +201,8 @@ set(X16_SOURCES
     src/iso_8859_15.c
     src/ymglue.cpp
     src/midi.c
+    src/netcard.c
+    src/net_socket.c
     src/extern/ymfm/src/ymfm_opm.cpp
 )
 
@@ -254,7 +256,7 @@ if(WIN32)
             -Wl,--subsystem,console
         )
     endif()
-    target_link_libraries(x16emu PRIVATE dwmapi)
+    target_link_libraries(x16emu PRIVATE dwmapi ws2_32)
 endif()
 
 # macOS Specifics
@@ -356,3 +358,15 @@ message(STATUS "================================================================
 message(STATUS "   Fluidsynth Support : ${FLUID_EN_MSG}")
 message(STATUS "   Trace Support      : ${TRACE_EN_MSG}")
 message(STATUS "=========================================================================\n")
+
+# Standalone serial-card test library (no ROM/display/CPU dependencies).
+option(BUILD_SERIALCARD_TESTS "Build serial-card tests" OFF)
+if(BUILD_SERIALCARD_TESTS AND NOT EMSCRIPTEN)
+    add_library(serialcard_test SHARED src/netcard.c src/net_socket.c)
+    target_include_directories(serialcard_test PRIVATE src)
+    target_link_libraries(serialcard_test PRIVATE SDL2::SDL2)
+    set_target_properties(serialcard_test PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    if(WIN32)
+        target_link_libraries(serialcard_test PRIVATE ws2_32)
+    endif()
+endif()

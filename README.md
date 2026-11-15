@@ -1,3 +1,5 @@
+> **serial-network branch:** Optional Windows/Linux serial-card and host TCP modem support. See [SERIAL-NETWORK.md](SERIAL-NETWORK.md). `master` remains upstream.
+
 <p align="center">
   <img src="./.gh/logo.png" />
 </p>

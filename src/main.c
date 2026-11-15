@@ -43,6 +43,7 @@
 #include "testbench.h"
 #include "cartridge.h"
 #include "midi.h"
+#include "netcard.h"
 #include "git_rev.h"
 
 #ifdef __EMSCRIPTEN__
@@ -340,6 +341,7 @@ machine_reset()
 	mouse_state_init();
 	reset6502(regs.is65c816);
 	midi_serial_init();
+	netcard_reset();
 }
 
 void
@@ -536,6 +538,8 @@ usage()
 	printf("\tSuppress warning emitted when encountering a Rockwell extension on the 65C02\n");
 	printf("-longpwron\n");
 	printf("\tSimulate a long press of the power button at system power-on.\n");
+	printf("-serialcard [<address>]\n");
+	printf("\tEnable dual UART and host TCP modem (default $9FE0; native builds only).\n");
 	printf("-midicard [<address>]\n");
 	printf("\tInstall a serial MIDI card at the specified address, or at $9F60 by default.\n");
 	printf("\tThe -sf2 option must be specified along with this option.\n");
@@ -680,7 +684,22 @@ main(int argc, char **argv)
 			prg_path = argv[0];
 			argc--;
 			argv++;
-		} else if (!strcmp(argv[0], "-midicard")) {
+		} else if (!strcmp(argv[0], "-serialcard")) {
+            argc--; argv++;
+            unsigned long address=0x9fe0;
+            if (argc && argv[0][0] != '-') {
+                char *end;
+                address=strtoul(argv[0], &end, 16);
+                if (*end || address > 0xffff) {
+                    fprintf(stderr,"Invalid -serialcard address\n"); return 1;
+                }
+                argc--; argv++;
+            }
+            if (!netcard_enable((uint16_t)address)) {
+                fprintf(stderr,"Cannot enable serial card: use an available 16-byte I/O slot ($9F60-$9FF0 except $9FB0), on a native build.\n");
+                return 1;
+            }
+        } else if (!strcmp(argv[0], "-midicard")) {
 #ifndef HAS_FLUIDSYNTH
 			no_fluidsynth_warning();
 #endif
@@ -1187,6 +1206,10 @@ main(int argc, char **argv)
 #endif
 	}
 
+    if (has_midi_card && netcard_matches(midi_card_addr)) {
+        fprintf(stderr,"Serial and MIDI cards cannot share the same I/O slot\n");
+        netcard_close(); return 1;
+    }
 	if (sf2_path && has_midi_card) {
 		if (midi_card_addr < 0x9f60) {
 			fprintf(stderr, "Warning: Serial MIDI card address must be in the range of 9F60-9FF0\n");
@@ -1299,6 +1322,7 @@ main(int argc, char **argv)
 }
 
 void main_shutdown() {
+	netcard_close();
 	if (!headless){
 		wav_recorder_shutdown();
 		audio_close();
@@ -1739,6 +1763,7 @@ emulator_loop(void *param)
 		}
 
 		midi_serial_step(clocks);
+		netcard_step(MHZ, clocks);
 
 		if (!headless && new_frame) {
 			if (nvram_dirty && nvram_path) {
@@ -1768,7 +1793,7 @@ emulator_loop(void *param)
 			audio_render();
 		}
 
-		if (video_get_irq_out() || via1_irq() || (has_via2 && via2_irq()) || (ym2151_irq_support && YM_irq()) || (has_midi_card && midi_serial_irq())) {
+		if (video_get_irq_out() || via1_irq() || (has_via2 && via2_irq()) || (ym2151_irq_support && YM_irq()) || (has_midi_card && midi_serial_irq()) || netcard_irq()) {
 //			printf("IRQ!\n");
 			irq6502();
 		}

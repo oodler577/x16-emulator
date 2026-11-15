@@ -1,0 +1,111 @@
+name: Serial Network
+on:
+  push:
+    branches: [serial-network]
+  pull_request:
+    paths:
+      - 'src/netcard.*'
+      - 'src/net_socket.*'
+      - 'src/memory.c'
+      - 'src/main.c'
+      - 'CMakeLists.txt'
+      - 'tests/**'
+      - '.github/workflows/serial-network.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake libsdl2-dev zlib1g-dev 64tass
+      - name: Build emulator and test library
+        run: |
+          cmake -S . -B build -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON
+          cmake --build build --parallel 4
+      - name: UART and loopback TCP tests
+        run: |
+          set -o pipefail
+          python3 tests/test_serialcard.py build/libserialcard_test.so | tee build/serialcard.tap
+      - name: Reproduce guest test binary
+        run: |
+          64tass -q -a -B --nostart -o build/serialcard_guest.bin tests/serialcard_guest.asm
+          cmp tests/serialcard_guest.bin build/serialcard_guest.bin
+      - name: Fetch matching test ROM
+        run: python3 tests/fetch_test_rom.py
+      - name: End-to-end emulated CPU to host TCP
+        run: |
+          set -o pipefail
+          python3 tests/test_emulator_serialcard.py --emulator build/x16emu --rom build/test-rom.bin | tee build/emulator-serialcard.tap
+      - name: Undefined behavior sanitizer
+        run: |
+          cmake -S . -B build-ubsan -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON -DCMAKE_C_FLAGS="-fsanitize=undefined -fno-sanitize-recover=all"
+          cmake --build build-ubsan --target serialcard_test --parallel 4
+          python3 tests/test_serialcard.py build-ubsan/libserialcard_test.so
+      - name: Package
+        run: |
+          mkdir serial-network-linux
+          cp build/x16emu SERIAL-NETWORK.md serial-network-linux/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: serial-network-linux
+          path: |
+            serial-network-linux/*
+            build/*.tap
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-pkgconf
+      - name: Build emulator and test DLL
+        run: |
+          cmake -S . -B build -G Ninja -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON
+          cmake --build build --parallel 4
+      - name: Windows UART and Winsock TCP tests
+        run: |
+          set -o pipefail
+          python tests/test_serialcard.py build/libserialcard_test.dll | tee build/serialcard.tap
+      - name: Fetch matching test ROM
+        run: python tests/fetch_test_rom.py
+      - name: Windows end-to-end emulated CPU to host TCP
+        run: |
+          set -o pipefail
+          python tests/test_emulator_serialcard.py --emulator build/x16emu.exe --rom build/test-rom.bin | tee build/emulator-serialcard.tap
+      - name: Package Windows executable and runtime DLLs
+        run: |
+          mkdir serial-network-windows
+          cp build/x16emu.exe SERIAL-NETWORK.md serial-network-windows/
+          cp /mingw64/bin/SDL2.dll /mingw64/bin/zlib1.dll serial-network-windows/
+          for f in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
+            if test -f "/mingw64/bin/$f"; then cp "/mingw64/bin/$f" serial-network-windows/; fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: serial-network-windows-x86_64
+          path: |
+            serial-network-windows/*
+            build/*.tap
