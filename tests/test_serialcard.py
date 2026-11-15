@@ -69,11 +69,12 @@ class Card:
         self.wait(lambda: self.read(6)&0x80)
 
 class Fixture:
-    def __init__(self,payload=b"",echo=True,close=False):
+    def __init__(self,payload=b"",echo=True,close=False,allow_reset=False):
         self.listener=socket.socket()
         self.listener.bind(("127.0.0.1",0)); self.listener.listen(); self.listener.settimeout(.1)
         self.port=self.listener.getsockname()[1]
         self.payload,self.echo,self.close_after=payload,echo,close
+        self.allow_reset=allow_reset
         self.received=bytearray(); self.stop=False; self.failure=None
         self.thread=threading.Thread(target=self.run,daemon=True); self.thread.start()
     def run(self):
@@ -92,6 +93,9 @@ class Fixture:
                         self.received.extend(data)
                         if self.echo: peer.sendall(data)
                 return
+        except ConnectionResetError as exc:
+            # Reset deliberately discards unread socket data; TCP may send RST.
+            if not self.stop and not self.allow_reset: self.failure=exc
         except OSError as exc:
             if not self.stop: self.failure=exc
     def __enter__(self): return self
@@ -225,7 +229,7 @@ class SerialCardTests(unittest.TestCase):
                 self.c.write(4,0x26); self.c.wait(lambda: not self.c.read(6)&0x80); self.c.write(4,0x27)
     def test_reset_discards_previous_connection_generation(self):
         self.c.prepare()
-        with Fixture(b"old payload") as server:
+        with Fixture(b"old payload",allow_reset=True) as server:
             self.c.dial(server.port); self.c.reset(); self.c.init()
             self.assertFalse(self.c.read(6)&0x80)
             self.assertEqual(self.c.command(b"ATE0"),b"ATE0\r\r\nOK\r\n")
