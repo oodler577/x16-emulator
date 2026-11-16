@@ -539,6 +539,8 @@ usage()
 	printf("-longpwron\n");
 	printf("\tSimulate a long press of the power button at system power-on.\n");
 	printf("-serialcard [<address>]\n");
+    printf("-serial2-device <COMx or /dev/tty...>  Attach a host serial port\n");
+    printf("-serial2 <host:port>  Attach second UART to a TCP serial bridge\n");
 	printf("\tEnable dual UART and host TCP modem (default $9FE0; native builds only).\n");
 	printf("-midicard [<address>]\n");
 	printf("\tInstall a serial MIDI card at the specified address, or at $9F60 by default.\n");
@@ -699,6 +701,18 @@ main(int argc, char **argv)
                 fprintf(stderr,"Cannot enable serial card: use an available 16-byte I/O slot ($9F60-$9FF0 except $9FB0), on a native build.\n");
                 return 1;
             }
+        } else if (!strcmp(argv[0], "-serial2-device")) {
+            argc--; argv++;
+            if (!argc || !netcard_attach_device(argv[0])) {
+                fprintf(stderr,"-serial2-device requires a COM or tty device path\n"); return 1;
+            }
+            argc--; argv++;
+        } else if (!strcmp(argv[0], "-serial2")) {
+            argc--; argv++;
+            if (!argc || !netcard_attach_serial(argv[0])) {
+                fprintf(stderr,"-serial2 requires a host:port TCP serial bridge\n"); return 1;
+            }
+            argc--; argv++;
         } else if (!strcmp(argv[0], "-midicard")) {
 #ifndef HAS_FLUIDSYNTH
 			no_fluidsynth_warning();

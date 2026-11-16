@@ -203,6 +203,7 @@ set(X16_SOURCES
     src/midi.c
     src/netcard.c
     src/net_socket.c
+    src/net_serial.c
     src/extern/ymfm/src/ymfm_opm.cpp
 )
 
@@ -365,11 +366,23 @@ message(STATUS "================================================================
 # Standalone serial-card test library (no ROM/display/CPU dependencies).
 option(BUILD_SERIALCARD_TESTS "Build serial-card tests" OFF)
 if(BUILD_SERIALCARD_TESTS AND NOT EMSCRIPTEN)
-    add_library(serialcard_test SHARED src/netcard.c src/net_socket.c)
+    add_library(serialcard_test SHARED src/netcard.c src/net_socket.c src/net_serial.c)
     target_include_directories(serialcard_test PRIVATE src)
     target_link_libraries(serialcard_test PRIVATE SDL2::SDL2)
     set_target_properties(serialcard_test PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     if(WIN32)
         target_link_libraries(serialcard_test PRIVATE ws2_32)
+    endif()
+endif()
+
+# Native host protocols. curl performs HTTP/FTP/Gopher and verified TLS;
+# libssh2 supplies a password-authenticated interactive SSH channel.
+if(NOT EMSCRIPTEN)
+    find_package(CURL REQUIRED)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBSSH2 REQUIRED IMPORTED_TARGET libssh2)
+    target_link_libraries(x16emu PRIVATE CURL::libcurl PkgConfig::LIBSSH2)
+    if(BUILD_SERIALCARD_TESTS)
+        target_link_libraries(serialcard_test PRIVATE CURL::libcurl PkgConfig::LIBSSH2)
     endif()
 endif()

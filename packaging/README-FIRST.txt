@@ -1,30 +1,29 @@
-X16 Serial/Network Emulator Preview
-==================================
+X16 SERIAL/NETWORK EMULATOR - WINDOWS / LINUX
 
-This is the serial-network branch of oodler577/x16-emulator.
-Networking is opt-in. The included launcher enables the emulated serial card.
+Extract this whole package into a fresh folder and add your compatible rom.bin.
+The X16 ROM is not included. Keep all Windows DLLs and curl-ca-bundle.crt here.
 
-1. Extract the whole archive into its own folder.
-2. Copy your compatible Commander X16 rom.bin into that folder.
-   The release does not include an X16 ROM.
-3. Windows: double-click start-serial-network.bat.
-   Linux: run ./start-serial-network.sh.
-   Linux requires SDL2 and an Ubuntu 24.04-compatible x86-64 runtime.
-4. The network UART is $9FE0. The second, unattached UART is $9FE8.
-5. Run ROMTERM, choose $9FE0 / 115200 / RTS/CTS, then type ATI.
-   Use ATD"host:port" for raw TCP. Your host supplies the Internet connection;
-   there is no Wi-Fi setup in the emulator.
+To browse Gopher:
+  Windows: double-click start-gopher.bat
+  Linux:   sh start-gopher.sh
 
-Direct launch:
-  Windows: x16emu.exe -rom rom.bin -serialcard
-  Linux:   ./x16emu -rom rom.bin -serialcard
+The Gopher application and matching x16net.bin are included. Read GOPHER.md.
+The filename is x16net.bin (not x16lib.bin).
 
-Manual tests and Prog8/BASIC/assembly examples:
-https://github.com/oodler577/x16-emulator/wiki
+To use ROMTERM or another program:
+  Windows: x16emu.exe -rom rom.bin -serialcard -prg ROMTERM.PRG -run
+  Linux:   ./x16emu -rom rom.bin -serialcard -prg ROMTERM.PRG -run
 
-Read SERIAL-NETWORK.md for supported commands and limitations.
-This is a UART and modem-command subset, not actual ESP32 firmware.
-AT+CONFIG, AT&G, Telnet negotiation, TLS/HTTPS, SSH, UDP, and incoming
-listeners are not implemented. Physical-card validation remains separate.
+Supply ROMTERM yourself. Choose UART $9FE0, 115200, RTS/CTS and ASCII.
+Wi-Fi configuration is a MOCK; connections use your host's network and DNS.
+Try AT and ATI. See SERIAL-NETWORK.md for Telnet, TLS, SSH, incoming connections,
+AT&G downloads, UDP framing and second-UART attachment.
 
-The master branch mirrors upstream. Local work stays on serial-network.
+Linux needs Ubuntu 24.04-compatible libraries:
+  sudo apt install libsdl2-2.0-0 libcurl4t64 libssh2-1t64
+
+SHA256SUMS inside this package verifies the bundled x16net library and Gopher
+application. The release page's SHA256SUMS verifies the downloadable archives.
+PROVENANCE.json records the x16net source revision for these demo binaries.
+
+Setup and examples: https://github.com/oodler577/x16-emulator/wiki

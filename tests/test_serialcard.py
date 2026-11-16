@@ -181,7 +181,7 @@ class SerialCardTests(unittest.TestCase):
     def test_profile_echo_ascii_and_unsupported_commands(self):
         self.c.init(); self.assertIn(b"X16 host TCP modem",self.c.command(b"ATI"))
         self.c.prepare(); self.assertEqual(self.c.command(b"AT"),b"\rOK\r")
-        for cmd in (b"AT&G",b"ATS62=1",b"AT+CONFIG",b"AT&",b"ATS",b'ATD"host:0"',b'ATD"host:65536"'):
+        for cmd in (b"AT&G",b"AT&",b"ATS",b'ATD"host:0"',b'ATD"host:65536"'):
             self.assertEqual(self.c.command(cmd),b"\rERROR\r",cmd)
     def test_command_overflow_recovers(self):
         self.c.prepare()

@@ -33,6 +33,18 @@ def main():
             pending.append(target)
             manifest.append(f'{path.name} -> {target.name}')
     (executable.parent / 'runtime-dependencies.txt').write_text('\n'.join(sorted(set(manifest)))+'\n', encoding='utf-8')
+    prefix = runtime.parent
+    candidates = [prefix/'etc/ssl/certs/ca-bundle.crt', prefix/'ssl/certs/ca-bundle.crt', runtime/'curl-ca-bundle.crt']
+    bundle = next((p for p in candidates if p.is_file()), None)
+    if bundle is None:
+        raise RuntimeError('Missing CA bundle for portable TLS/HTTPS')
+    import ssl
+    assert ssl.create_default_context(cafile=str(bundle)).cert_store_stats()["x509_ca"] > 0
+    shutil.copy2(bundle, executable.parent/'curl-ca-bundle.crt')
+    licenses = prefix/'share/licenses'
+    if not licenses.is_dir():
+        raise RuntimeError('Missing runtime library license directory')
+    shutil.copytree(licenses, executable.parent/'third-party-licenses', dirs_exist_ok=True)
     print('\n'.join(sorted(set(manifest))))
 
 if __name__ == '__main__':

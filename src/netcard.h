@@ -5,6 +5,8 @@
 #include <stdbool.h>
 bool netcard_enable(uint16_t address);
 bool netcard_matches(uint16_t address);
+bool netcard_attach_device(const char *path);
+bool netcard_attach_serial(const char *endpoint);
 void netcard_reset(void);
 void netcard_close(void);
 void netcard_step(unsigned mhz, uint32_t clocks);

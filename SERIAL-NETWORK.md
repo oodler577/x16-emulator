@@ -1,132 +1,202 @@
-# Serial/network development branch
+# Serial/network branch
 
-This fork keeps **master identical to upstream master**. **serial-network**
-contains that base plus the optional serial/network-card implementation.
-There is no upstream PR yet.
+`master` mirrors X16Community's upstream master. `serial-network` carries the
+optional serial/network card and host bridge. No upstream PR has been submitted.
 
-## Windows
+## Start on Windows or Linux
 
-Download the Windows ZIP from [Releases](https://github.com/oodler577/x16-emulator/releases).
-Development builds are also available as the **serial-network-windows-x86_64**
-artifact in this branch's **Serial Network** workflow. Extract it into a separate folder;
-it includes x16emu.exe and runtime DLLs. Supply your compatible rom.bin, then run:
+Download the appropriate package from
+[Releases](https://github.com/oodler577/x16-emulator/releases), extract everything
+into a fresh folder, and add your compatible `rom.bin`. The ROM is not bundled.
 
-    x16emu.exe -rom rom.bin -serialcard
+```text
+Windows: x16emu.exe -rom rom.bin -serialcard
+Linux:   ./x16emu -rom rom.bin -serialcard
+```
 
-For Linux, use the serial-network-linux artifact or build from source:
+Windows includes recursive DLL dependencies, third-party license files and a CA
+bundle for TLS. Linux targets Ubuntu 24.04 with SDL2, libcurl and libssh2 installed:
+`sudo apt install libsdl2-2.0-0 libcurl4t64 libssh2-1t64`.
 
-    cmake -S . -B build -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF
-    cmake --build build --parallel 4
-    ./build/x16emu -rom /path/to/rom.bin -serialcard
+The packages also include **x16net.bin** and **x16net-gopher.prg**, a Prog8 Gopher
+browser using the pure library bindings. Use `start-gopher.bat` or
+`sh start-gopher.sh`; see **GOPHER.md** for navigation and limits.
 
-The native builds need SDL2 and zlib, just like the base emulator. Windows uses
-Winsock; Linux/macOS use POSIX sockets. No Python service, VM bridge adapter or
-Wi-Fi configuration is needed for normal use. Python is only a test dependency.
+The card is disabled unless `-serialcard` is present. Its default network UART is
+**$9FE0**, and the second UART is **$9FE8**. An optional aligned base address
+($9F60..$9FF0, excluding $9FB0) follows `-serialcard`. Do not overlap the MIDI card.
 
-The option is disabled by default. Enabling it allows guest programs to initiate
-outbound TCP connections using the host's ordinary network access. There are no
-incoming listeners, shell commands, credential stores or firmware updates.
-It supports IPv4/IPv6/DNS through the host resolver, not a virtual Ethernet NIC.
+## Host bridge and mock Wi-Fi
 
-Optional base address:
+**This is a host network bridge, not an ESP32 firmware image or a Wi-Fi radio.**
+`ATI`, `ATI2`, `ATI3`, `ATW` and `AT+CONFIG` identify the Wi-Fi interface as a
+**MOCK**. `ATW"label,password"` changes only a mock SSID label; no Wi-Fi connection
+is made and no password is saved. The configuration menu offers bridge status
+and a mock label. Your host's network routing and DNS provide connectivity.
+No credentials or real Wi-Fi settings are needed for ordinary TCP connections.
 
-    x16emu.exe -serialcard 9fe0
+## ROMTERM commands
 
-Use a 16-byte-aligned I/O slot $9f60..$9ff0 except $9fb0 (emulator registers).
-A MIDI card cannot occupy the same slot. Port A at base is the host modem;
-port B at base+8 models an unattached physical UART, with local loopback support.
-Port B does not open a host COM/tty port.
+Set ROMTERM to $9FE0, 115200, RTS/CTS and ASCII. For ANSI services, choose the
+appropriate ROMTERM display mode as well. Basic command examples:
 
-## Guest use
+| Command | Behavior |
+| --- | --- |
+| `AT`, `ATI` | Test the command interpreter; identify the bridge |
+| `AT+CONFIG`, `ATW`, `ATI3` | Clearly labeled mock Wi-Fi setup/status |
+| `ATD"host:port"` | Raw TCP stream |
+| `ATDT"host:port"` | Telnet stream with option negotiation |
+| `ATS62=1` / `ATS62=0` | Enable / disable Telnet as the default for dialing |
+| `ATDS"host:port"` | TLS stream with certificate/hostname verification |
+| `ATDS"user:password@host:port"` | SSH shell (password authentication) |
+| `ATC`, `ATC0` | Current connection and listener information |
+| `ATO` or `ATD` | Resume the current stream after escaping |
+| `ATH` | Disconnect; retain a configured listener |
+| `ATA2323` | Start an incoming TCP listener on port 2323 |
+| `ATA` | Answer the pending call |
+| `ATS0=1S41=1A2323` | Listen and automatically enter a stream on the first ring |
+| `ATN0`, `ATN1` | Stop the listener |
+| `ATZ` | Disconnect, stop listeners and reset volatile settings |
 
-The default hardware layout is $9fe0-$9fe7 for the ESP/network UART and
-$9fe8-$9fef for the second UART. Guest programs access ordinary card registers;
-no emulator-specific networking API is required. Existing ROMTERM UART probing,
-ATI and quoted raw TCP dialing can exercise the model. ROMTERM itself has not
-been manually tested here.
+Pause for at least one second, send `+++`, then pause for one second to return
+to command mode while keeping carrier. `ATO` resumes. `S2` selects the escape
+byte; values >=128 disable recognition. `S12` is the guard interval in 20 ms
+units. Unguarded plus signs remain payload. DTR hangup remains available with
+`S63=2` (or OPA with `S63=3`). `Q1` suppresses result messages for binary transfers;
+DCD then reports carrier. Restart the emulator between unrelated guest programs.
 
-The existing x16net binary can initialize $9fe0, prepare, connect and transfer
-raw bytes without changes. Prog8 uses its normal binary bindings. Do not load
-the binary on top of a guest program's memory.
+The initialization string used by x16net remains supported, including raw mode,
+quiet mode, flow control, ASCII and the supported profile pin-register settings.
+`&W` remains a volatile compatibility acknowledgment; settings are not persisted.
+Unknown commands return `ERROR`, rather than pretending to support ESP32 features.
+`I1`/`I5` show implemented settings. `I6` labels its synthetic MAC as a mock.
 
-Examples of supported commands:
+### Telnet
 
-    ATI
-    ATE0V1Q0X0F0R0&P0S62=0S63=2S46=0S48=0S50=0S54=0N0H
-    ATD"example.com:80"
-    ATQ1D"example.com:80"
+IAC commands are consumed, literal $FF is escaped, and fragmented commands are
+handled across UART reads. Negotiation supports binary mode, echo,
+suppress-go-ahead, VT100 terminal type and 80x25 window size; unsupported options
+are refused. Raw TCP mode continues to preserve every byte. Terminal rendering
+belongs to ROMTERM or the guest application, not to the network bridge.
 
-Q1 suppresses modem result text; DCD reports the connection. DTR deassertion
-hangs up when S63=2. Raw stream bytes are not translated: NUL, XON/XOFF, +++,
-ESC and $ff remain data. There is no +++ escape recognizer; use DTR.
-While quiet, closed/refused connections produce no text. Code using Q1 must
-handle carrier/timeout and its own application deadlines.
+### TLS and SSH trust
 
-The parser also supports AT, H/H0, Z/Z0, E0/1, V0/1, Q0/1, X0/1, F0/4, R0/1,
-Bn, N0, &W, &P0, &K0/3, S63=0/2/3, and the zero-valued profile registers shown
-above. S45=0..3 is accepted for initialization compatibility; AT&G is unsupported.
-&W is a volatile no-op. ATI4 identifies this bridge, not a Zimodem version.
-Unknown commands return ERROR (unless quiet).
+TLS uses libcurl's certificate and hostname verification. On Windows, the bundled
+`curl-ca-bundle.crt` is found beside the executable. For a private/test CA, set
+`X16_SERIAL_CA_FILE` to a PEM trust file before launching the emulator.
 
-## Implementation boundaries
+SSH uses libssh2, requests a VT100 PTY, and verifies the host key against OpenSSH
+`known_hosts` before transmitting a password. It reads `~/.ssh/known_hosts` (or
+`USERPROFILE` when HOME is absent on Windows). Set `X16_SERIAL_KNOWN_HOSTS` to use
+another file. Add the server's independently verified key to that file first.
+An unknown/mismatched host key, failed authentication or invalid certificate
+returns `NO ANSWER`; it does not fall back to an insecure connection.
 
-* Two independent UART register sets, DLAB/divisors, scratch registers, 1/16-byte
-  FIFOs, trigger levels, THRE/TEMT, local loopback, overrun/break flags, receive
-  timeout, interrupt priorities and modem-status deltas are modeled.
-* The emulator's existing IRQ path carries card interrupts. No NMI jumper mode.
-* Character scheduling follows emulated CPU clock and UART divisor/framing.
-  It is not an electrical/cycle-exact TL16C2550 validation. Mismatched modem
-  baud, parity corruption, and analog serial lines are not simulated.
-* Host sockets and DNS run on a worker thread. Reset/cancellation generations
-  prevent stale results from reconnecting a reset guest. Native OS DNS cannot
-  always be interrupted; closing the emulator can wait for an in-progress host
-  resolver call. TCP connect waits are bounded and cancellable.
-* Buffers are finite. RTS/CTS holds received data at the modem/socket side;
-  disabling flow control can overrun the emulated receive FIFO.
-* Queued incoming bytes drain before carrier drops on remote close. Even an
-  immediate empty connection asserts carrier for four emulated character times
-  so polling clients can observe it. This is a deliberate model behavior, not
-  evidence about physical ESP32 firmware queue timing.
-* This is a Zimodem-compatible command subset. It does not execute ESP32 firmware,
-  provision Wi-Fi, negotiate Telnet, offer AT&G file downloads, TLS/HTTPS, UDP,
-  SSH, inbound servers, saved settings or multiple network connections.
-* Browser/WebAssembly builds retain their existing behavior; host networking is
-  unavailable and -serialcard is rejected.
+### Downloads with AT&G
 
-## Tests
+```text
+AT&G"http://host:port/path"
+AT&G"https://host/path"
+AT&G"host:port/path"
+```
 
-    cmake -S . -B build -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON
-    cmake --build build --parallel 4
-    python3 tests/test_serialcard.py build/libserialcard_test.so
-    python3 tests/fetch_test_rom.py
-    python3 tests/test_emulator_serialcard.py --emulator build/x16emu --rom build/test-rom.bin
+HTTP, HTTPS, FTP, FTPS and Gopher URLs use libcurl, with at most five redirects.
+Without a scheme, HTTP is assumed. The worker caches up to **16 MiB**, bounded by
+a 60-second request timeout. Failed/truncated HTTP transfers produce `ERROR`.
+This implementation buffers before delivering the file even with S45=3.
 
-On Windows the test library is build/libserialcard_test.dll.
-CI runs the real C register/socket tests and a full guest-to-local-TCP echo
-test on Linux and Windows. Linux also verifies assembly fixture reproduction and
-runs undefined-behavior sanitization. All servers are loopback-only; CI does not
-depend on public Internet services. A pinned official ROM is fetched for testing
-but is not redistributed in the fork artifacts.
+S45 chooses the Zimodem output format:
 
-Optional local x16net integration (supply your own binary):
+* `S45=0`: `[ 0 length sum8 ]` plus EOL, followed by exact binary data.
+* `S45=1`: hexadecimal header and data, 39 bytes per output line.
+* `S45=2`: decimal header fields and one decimal byte per line.
+* `S45=3`: `[ 0 length ]` plus EOL, followed by exact binary data.
 
-    64tass -q -a -B --nostart -D USING_LIBRARY=1 -o build/x16net_guest.bin tests/serialcard_guest.asm
-    python3 tests/test_emulator_serialcard.py --emulator build/x16emu --rom build/test-rom.bin --guest build/x16net_guest.bin --x16net /path/to/x16net.bin
+A final `OK` follows a completed transfer unless quiet mode is enabled. ASCII
+Ctrl+C cancels. RTS/CTS preserves output backpressure. The hardware firmware's
+flash, SD card, packet-number variants, XON/XOFF and programmable packet
+transformations are not emulated.
 
-## Tracking upstream
+### Incoming connections
 
-    git fetch upstream
-    git switch master
-    git merge --ff-only upstream/master
-    git push origin master
-    git switch serial-network
-    git merge master
+Listeners bind **127.0.0.1 by default**. To accept connections from another machine,
+set `X16_SERIAL_BIND` to a particular host interface address (or `0.0.0.0`) before
+launch. The host firewall must allow that port. Merely enabling `-serialcard`
+does not create a listener: a guest must issue `ATAport`.
 
-Run both native CI jobs after integrating changes. Keep feature commits out of
-master, and never push this branch to upstream without agreeing on a PR.
+The model supports one active network connection and one configured listener.
+`RING`, RI, manual answer and S0 auto-answer are modeled. A listener rearms after
+disconnect; it cannot accept another connection while the first is active.
+S41 is accepted; incoming connections use stream mode in this bridge. There is
+no multi-connection command-mode packet API.
 
-## Publishing a preview
+### UDP extension
 
-Push a serial-network-v* tag from this branch. The workflow rebuilds and tests
-Windows and Linux, then publishes both packages and SHA256SUMS as a prerelease.
-The publisher runs only after both native jobs succeed.
+`ATDU"host:port"` is an **emulator extension**, not a claimed Zimodem command.
+Each serial packet consists of a **two-byte big-endian payload length** followed
+by one UDP datagram. Incoming datagrams use the same framing. Empty datagrams
+are supported. The maximum payload is 8192 bytes. Oversized outgoing frames close
+carrier; oversized incoming datagrams are discarded. Only the selected peer can
+send into a connected UDP socket. UART flow control cannot make UDP reliable.
+
+## Second UART
+
+Port B can connect to either a host serial device or a TCP serial bridge:
+
+```text
+x16emu.exe -rom rom.bin -serialcard -serial2-device COM3
+./x16emu -rom rom.bin -serialcard -serial2-device /dev/ttyUSB0
+x16emu.exe -rom rom.bin -serialcard -serial2 127.0.0.1:2525
+```
+
+COM/tty operations run on the worker. Guest baud, framing, DTR/RTS and break are
+applied where the host OS supports them; CTS/DSR/RI/DCD are read back. Common baud
+rates through 921600 are supported on Linux when provided by termios. Unsupported
+host settings leave the previous host configuration in place. Linux PTYs have
+no physical modem pins and report a ready peer. The TCP bridge has ready modem
+signals while connected. A disconnected second UART must be reattached by
+restarting the emulator. With no attachment, it remains available for local
+UART loopback. Physical electrical timing/error behavior is not simulated.
+
+## Build and tests
+
+```sh
+sudo apt install cmake libsdl2-dev zlib1g-dev libcurl4-openssl-dev libssh2-1-dev \
+  python3-paramiko openssl 64tass
+cmake -S . -B build -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF \
+  -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON
+cmake --build build --parallel 4
+python3 tests/test_serialcard.py build/libserialcard_test.so
+python3 tests/test_modem_protocols.py build/libserialcard_test.so
+python3 tests/fetch_test_rom.py
+python3 tests/test_emulator_serialcard.py --emulator build/x16emu --rom build/test-rom.bin
+X16EMU="$PWD/build/x16emu" X16ROM="$PWD/build/test-rom.bin" python3 tests/test_gopher_demo.py
+```
+
+Windows uses the equivalent MinGW packages and `libserialcard_test.dll`. CI runs
+native Windows and Linux tests, including local TLS/SSH fixtures, malformed and
+fragmented messages, TCP/UDP, downloads, incoming calls and the bundled Prog8
+Gopher core. Linux exercises a PTY and undefined-behavior sanitization. Windows
+checks invalid COM-port failure; actual COM hardware needs manual testing. The
+extracted Windows ZIP is tested with MSYS2 removed from the emulator's PATH.
+
+Both UARTs model registers, DLAB, FIFOs, trigger levels, transmit timing, loopback,
+overrun/break status, interrupt priorities and modem-status deltas. Debug reads
+are side-effect free. Receive queues drain before DCD falls. A successful empty
+TCP connection holds carrier for four guest character periods so polling clients
+can observe it. Native DNS can delay shutdown until the host resolver returns.
+WebAssembly builds do not expose host networking. NMI jumper operation and exact
+ESP32/TL16C2550 timing are not modeled. Real hardware validation remains separate.
+
+## References and branch maintenance
+
+The command/protocol reference is Bo Zimmerman's
+[Zimodem](https://github.com/bozimmerman/Zimodem), inspected at
+`a534e5129d88b8b09aa01fe17498d5cd5368569e`. Credit also goes to David Murray's
+ROMTERM and [TexElec's Commander X16 Serial & ESP32 Network Card](https://texelec.com/product/commander-x16-serial-network-card/).
+This independently implemented bridge does not bundle their firmware or ROMTERM.
+
+To update the upstream base, fetch `upstream`, fast-forward `master` to
+`upstream/master`, push `master`, then merge it into `serial-network` and rerun
+both native CI jobs. Feature commits belong only on `serial-network`. Publish a
+`serial-network-v*` tag to build, test and release Windows/Linux prerelease assets.

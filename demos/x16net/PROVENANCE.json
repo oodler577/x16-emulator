@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/retrodores/x16net",
+  "source_commit": "7217246f38124119fc3c96e2ad61cfe4cce15986",
+  "release": "v0.1.3",
+  "compiler": "Prog8 14.0-BETA3 (e98adeaf), 64tass 1.59",
+  "binary_abi": 1,
+  "sha256": {
+    "x16net.bin": "a64867f1eb3b6db17654c5e7b641335454305931ec730927b92ec14c85d18f60",
+    "gopher_test.prg": "f1839c8c9378f09fb5d1e1e8aa1c68dfbee154a44a14672497f54efdd92aa1b7",
+    "x16net-gopher.prg": "661e764ce3a23d550fbf0a711af4d9e14db0886cedf68c820a16457026289ffd"
+  }
+}

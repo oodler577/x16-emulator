@@ -7,6 +7,9 @@ on:
     paths:
       - 'src/netcard.*'
       - 'src/net_socket.*'
+      - 'src/net_serial.*'
+      - 'demos/**'
+      - 'packaging/**'
       - 'src/memory.c'
       - 'src/main.c'
       - 'CMakeLists.txt'
@@ -24,7 +27,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake libsdl2-dev zlib1g-dev 64tass
+        run: sudo apt-get update && sudo apt-get install -y cmake libsdl2-dev zlib1g-dev 64tass libcurl4-openssl-dev libssh2-1-dev python3-paramiko openssl
       - name: Build emulator and test library
         run: |
           cmake -S . -B build -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON
@@ -33,6 +36,10 @@ jobs:
         run: |
           set -o pipefail
           python3 tests/test_serialcard.py build/libserialcard_test.so | tee build/serialcard.tap
+      - name: Modem protocols and native serial PTY
+        run: |
+          set -o pipefail
+          /usr/bin/python3 tests/test_modem_protocols.py build/libserialcard_test.so 2>&1 | tee build/modem-protocols.log
       - name: Reproduce guest test binary
         run: |
           64tass -q -a -B --nostart -o build/serialcard_guest.bin tests/serialcard_guest.asm
@@ -48,10 +55,17 @@ jobs:
           cmake -S . -B build-ubsan -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON -DCMAKE_C_FLAGS="-fsanitize=undefined -fno-sanitize-recover=all"
           cmake --build build-ubsan --target serialcard_test --parallel 4
           python3 tests/test_serialcard.py build-ubsan/libserialcard_test.so
+          /usr/bin/python3 tests/test_modem_protocols.py build-ubsan/libserialcard_test.so
+      - name: Bundled Prog8 Gopher integration
+        run: python3 tests/test_gopher_demo.py
+        env:
+          X16EMU: ${{ github.workspace }}/build/x16emu
+          X16ROM: ${{ github.workspace }}/build/test-rom.bin
       - name: Package
         run: |
           mkdir serial-network-linux
-          cp build/x16emu LICENSE SERIAL-NETWORK.md build/*.tap packaging/README-FIRST.txt packaging/start-serial-network.sh serial-network-linux/
+          cp build/x16emu LICENSE SERIAL-NETWORK.md build/*.tap build/*.log packaging/README-FIRST.txt packaging/start-serial-network.sh packaging/start-gopher.sh serial-network-linux/
+          cp demos/x16net/{x16net.bin,x16net-gopher.prg,GOPHER.md,LICENSE-x16net.txt,PROVENANCE.json,SHA256SUMS} serial-network-linux/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -79,6 +93,10 @@ jobs:
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-python
             mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-curl
+            mingw-w64-x86_64-libssh2
+            mingw-w64-x86_64-python-paramiko
+            mingw-w64-x86_64-openssl
       - name: Build emulator and test DLL
         run: |
           cmake -S . -B build -G Ninja -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON
@@ -89,6 +107,10 @@ jobs:
           python tests/test_serialcard.py build/libserialcard_test.dll | tee build/serialcard.tap
       - name: Fetch matching test ROM
         run: python tests/fetch_test_rom.py
+      - name: Windows modem protocols
+        run: |
+          set -o pipefail
+          python tests/test_modem_protocols.py build/libserialcard_test.dll 2>&1 | tee build/modem-protocols.log
       - name: Windows end-to-end emulated CPU to host TCP
         run: |
           set -o pipefail
@@ -96,7 +118,8 @@ jobs:
       - name: Package Windows executable and runtime DLLs
         run: |
           mkdir serial-network-windows
-          cp build/x16emu.exe LICENSE SERIAL-NETWORK.md build/*.tap packaging/README-FIRST.txt packaging/start-serial-network.bat serial-network-windows/
+          cp build/x16emu.exe LICENSE SERIAL-NETWORK.md build/*.tap build/*.log packaging/README-FIRST.txt packaging/start-serial-network.bat packaging/start-gopher.bat serial-network-windows/
+          cp demos/x16net/{x16net.bin,x16net-gopher.prg,GOPHER.md,LICENSE-x16net.txt,PROVENANCE.json,SHA256SUMS} serial-network-windows/
           python packaging/windows_dependencies.py serial-network-windows/x16emu.exe /mingw64/bin
       - name: Test extracted Windows ZIP without MSYS2 on PATH
         run: |
@@ -104,13 +127,14 @@ jobs:
           from pathlib import Path
           import zipfile
           with zipfile.ZipFile('build/windows-package.zip','w') as archive:
-              for path in Path('serial-network-windows').iterdir():
-                  archive.write(path,path.name)
+              for path in Path('serial-network-windows').rglob('*'):
+                  if path.is_file(): archive.write(path,path.relative_to('serial-network-windows'))
           with zipfile.ZipFile('build/windows-package.zip') as archive:
               archive.extractall('build/extracted-windows')
           PYTEST
           set -o pipefail
           python tests/test_emulator_serialcard.py --emulator build/extracted-windows/x16emu.exe --rom build/test-rom.bin --clean-path | tee serial-network-windows/package-smoke.tap
+          X16EMU="$PWD/build/extracted-windows/x16emu.exe" X16ROM="$PWD/build/test-rom.bin" python tests/test_gopher_demo.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -139,7 +163,7 @@ jobs:
       - name: Archive binaries and calculate checksums
         run: |
           mkdir release-assets
-          chmod +x downloads/linux/x16emu downloads/linux/start-serial-network.sh
+          chmod +x downloads/linux/x16emu downloads/linux/start-serial-network.sh downloads/linux/start-gopher.sh
           tar -czf release-assets/x16emu-serial-network-linux-x86_64.tar.gz -C downloads/linux .
           (cd downloads/windows && zip -qr ../../release-assets/x16emu-serial-network-windows-x86_64.zip .)
           (cd release-assets && sha256sum *.tar.gz *.zip > SHA256SUMS)

@@ -1,35 +1,29 @@
-Windows packaging fix: includes the executable's recursively discovered runtime
-DLLs, including `libz-1.dll`. The extracted ZIP now passes a full CPU-to-TCP test
-with MSYS2 removed from the emulator's PATH. This fixes the missing-DLL startup
-error in preview 0.1.0. Extract this release into a fresh folder and add `rom.bin`.
+Serial/network preview 0.2.0 for **Windows x86-64 and Linux x86-64**.
 
-Experimental serial/network emulator preview for **Windows x86-64** and
-**Linux x86-64**.
+Includes the **X16NET Gopher demo** (`x16net-gopher.prg`) and its matching
+**x16net.bin**. Add your compatible `rom.bin`, then run `start-gopher.bat` on
+Windows or `sh start-gopher.sh` on Linux. The ROM is not bundled.
 
-This release adds the Commander X16 dual-UART serial-card model and a host TCP
-modem to the `serial-network` branch. `master` remains an upstream mirror.
+This update adds Telnet negotiation, verified TLS and SSH connections, AT&G
+HTTP/HTTPS/FTP/Gopher downloads, guarded +++ escape and connection status,
+incoming TCP calls, framed UDP as a documented emulator extension, and second
+UART attachment to host COM/tty devices or a TCP serial bridge.
 
-Download the Windows ZIP or Linux tar.gz, extract the complete package, and put
-your compatible `rom.bin` beside the executable. An X16 ROM is not bundled.
-Start with the included launcher, or use:
+**Wi-Fi configuration is explicitly a MOCK. All networking uses the host bridge.**
+No radio configuration or Wi-Fi credentials are required or saved.
 
-```text
-Windows: x16emu.exe -rom rom.bin -serialcard
-Linux:   ./x16emu -rom rom.bin -serialcard
-```
+Extract the entire Windows ZIP: it includes recursive runtime DLL dependencies,
+a TLS CA bundle and third-party license files. Linux targets Ubuntu 24.04 with
+SDL2, libcurl and libssh2. See README-FIRST.txt and SERIAL-NETWORK.md.
 
-Windows includes the required runtime DLLs. Linux targets Ubuntu 24.04-compatible
-x86-64 systems with SDL2 installed. Verify downloads using `SHA256SUMS`.
+Native Windows/Linux protocol tests, full CPU-to-TCP tests and the bundled
+Prog8 Gopher protocol test must pass before publication. Linux also tests a
+serial PTY and undefined-behavior sanitization. Actual Windows COM hardware and
+the physical X16 card still need manual verification. This host implementation
+is not an ESP32 firmware image or a claim of complete firmware parity; documented
+limits include one active connection, bounded downloads and volatile settings.
 
-[Setup, ROMTERM manual tests, and Prog8/BASIC/ASM examples](https://github.com/oodler577/x16-emulator/wiki)
+[Setup, commands and examples](https://github.com/oodler577/x16-emulator/wiki)
 
-Both native builds must pass UART/socket tests and a full emulated-CPU TCP echo
-test before the release is published. Linux also runs sanitizer checks.
-
-**Scope:** raw TCP, UART/FIFO/handshake/IRQ modeling, quiet mode and DTR hangup.
-This is a Zimodem-compatible subset, not ESP32 firmware. Wi-Fi configuration,
-AT&G, Telnet negotiation, TLS/HTTPS, SSH, UDP and incoming listeners are not
-implemented. The second UART is unattached except for local loopback.
-
-The physical card and David Murray's ROMTERM are described on
-[TexElec's Commander X16 Serial & ESP32 Network Card page](https://texelec.com/product/commander-x16-serial-network-card/).
+Credit: Bo Zimmerman's Zimodem; David Murray's ROMTERM; and
+[TexElec's Commander X16 Serial & ESP32 Network Card](https://texelec.com/product/commander-x16-serial-network-card/).
