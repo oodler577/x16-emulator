@@ -83,20 +83,20 @@ jobs:
           persist-credentials: false
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-SDL2
-            mingw-w64-x86_64-zlib
-            mingw-w64-x86_64-python
-            mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-curl
-            mingw-w64-x86_64-libssh2
-            mingw-w64-x86_64-python-paramiko
-            mingw-w64-x86_64-openssl
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-zlib
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-curl
+            mingw-w64-ucrt-x86_64-libssh2
+            mingw-w64-ucrt-x86_64-python-paramiko
+            mingw-w64-ucrt-x86_64-openssl
       - name: Build emulator and test DLL
         run: |
           cmake -S . -B build -G Ninja -DENABLE_FLUIDSYNTH=OFF -DENABLE_TRACE=OFF -DENABLE_LTO=OFF -DBUILD_SERIALCARD_TESTS=ON
@@ -120,7 +120,7 @@ jobs:
           mkdir serial-network-windows
           cp build/x16emu.exe LICENSE SERIAL-NETWORK.md build/*.tap build/*.log packaging/README-FIRST.txt packaging/start-serial-network.bat packaging/start-gopher.bat serial-network-windows/
           cp demos/x16net/{x16net.bin,x16net-gopher.prg,GOPHER.md,LICENSE-x16net.txt,PROVENANCE.json,SHA256SUMS} serial-network-windows/
-          python packaging/windows_dependencies.py serial-network-windows/x16emu.exe /mingw64/bin
+          python packaging/windows_dependencies.py serial-network-windows/x16emu.exe /ucrt64/bin
       - name: Test extracted Windows ZIP without MSYS2 on PATH
         run: |
           python - <<'PYTEST'
