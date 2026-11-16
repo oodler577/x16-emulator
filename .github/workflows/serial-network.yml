@@ -97,10 +97,20 @@ jobs:
         run: |
           mkdir serial-network-windows
           cp build/x16emu.exe LICENSE SERIAL-NETWORK.md build/*.tap packaging/README-FIRST.txt packaging/start-serial-network.bat serial-network-windows/
-          cp /mingw64/bin/SDL2.dll /mingw64/bin/zlib1.dll serial-network-windows/
-          for f in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
-            if test -f "/mingw64/bin/$f"; then cp "/mingw64/bin/$f" serial-network-windows/; fi
-          done
+          python packaging/windows_dependencies.py serial-network-windows/x16emu.exe /mingw64/bin
+      - name: Test extracted Windows ZIP without MSYS2 on PATH
+        run: |
+          python - <<'PYTEST'
+          from pathlib import Path
+          import zipfile
+          with zipfile.ZipFile('build/windows-package.zip','w') as archive:
+              for path in Path('serial-network-windows').iterdir():
+                  archive.write(path,path.name)
+          with zipfile.ZipFile('build/windows-package.zip') as archive:
+              archive.extractall('build/extracted-windows')
+          PYTEST
+          set -o pipefail
+          python tests/test_emulator_serialcard.py --emulator build/extracted-windows/x16emu.exe --rom build/test-rom.bin --clean-path | tee serial-network-windows/package-smoke.tap
       - uses: actions/upload-artifact@v4
         if: always()
         with:

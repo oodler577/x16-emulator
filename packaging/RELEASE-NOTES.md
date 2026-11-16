@@ -1,3 +1,8 @@
+Windows packaging fix: includes the executable's recursively discovered runtime
+DLLs, including `libz-1.dll`. The extracted ZIP now passes a full CPU-to-TCP test
+with MSYS2 removed from the emulator's PATH. This fixes the missing-DLL startup
+error in preview 0.1.0. Extract this release into a fresh folder and add `rom.bin`.
+
 Experimental serial/network emulator preview for **Windows x86-64** and
 **Linux x86-64**.
 
