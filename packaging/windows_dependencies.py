@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Bundle the PE import closure, using exact DLL filenames from objdump."""
+import os
 import re
 import shutil
 import subprocess
@@ -12,6 +13,11 @@ def main():
     executable = Path(sys.argv[1]).resolve()
     runtime = Path(sys.argv[2])
     available = {p.name.lower(): p for p in runtime.glob('*.dll')}
+    # Windows supplies imports such as WLDAP32.dll. Resolve from the actual
+    # system directory as well as the baseline list, while always preferring
+    # bundled runtime dependencies over similarly named system files.
+    system_root = os.environ.get('SystemRoot')
+    system_files = {p.name.lower() for p in (Path(system_root)/'System32').glob('*.dll')} if system_root else set()
     pending = [executable]
     seen = set()
     manifest = []
@@ -24,6 +30,9 @@ def main():
         for name in re.findall(r'DLL Name:\s*(\S+)', imports):
             key = name.lower()
             if key.startswith(('api-ms-win-', 'ext-ms-win-')) or key.removesuffix('.dll') in SYSTEM_DLLS:
+                continue
+            if key not in available and key in system_files:
+                manifest.append(f'{path.name} -> {name} (Windows system)')
                 continue
             if key not in available:
                 raise RuntimeError(f'{path.name}: unresolved non-system dependency {name}')
