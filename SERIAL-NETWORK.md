@@ -6,8 +6,9 @@ There is no upstream PR yet.
 
 ## Windows
 
-Download the **serial-network-windows-x86_64** artifact from this branch's
-**Serial Network** workflow in GitHub Actions. Extract it into a separate folder;
+Download the Windows ZIP from [Releases](https://github.com/oodler577/x16-emulator/releases).
+Development builds are also available as the **serial-network-windows-x86_64**
+artifact in this branch's **Serial Network** workflow. Extract it into a separate folder;
 it includes x16emu.exe and runtime DLLs. Supply your compatible rom.bin, then run:
 
     x16emu.exe -rom rom.bin -serialcard
@@ -123,3 +124,9 @@ Optional local x16net integration (supply your own binary):
 
 Run both native CI jobs after integrating changes. Keep feature commits out of
 master, and never push this branch to upstream without agreeing on a PR.
+
+## Publishing a preview
+
+Push a serial-network-v* tag from this branch. The workflow rebuilds and tests
+Windows and Linux, then publishes both packages and SHA256SUMS as a prerelease.
+The publisher runs only after both native jobs succeed.

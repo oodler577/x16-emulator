@@ -2,6 +2,7 @@ name: Serial Network
 on:
   push:
     branches: [serial-network]
+    tags: [serial-network-v*]
   pull_request:
     paths:
       - 'src/netcard.*'
@@ -50,7 +51,7 @@ jobs:
       - name: Package
         run: |
           mkdir serial-network-linux
-          cp build/x16emu LICENSE SERIAL-NETWORK.md build/*.tap serial-network-linux/
+          cp build/x16emu LICENSE SERIAL-NETWORK.md build/*.tap packaging/README-FIRST.txt packaging/start-serial-network.sh serial-network-linux/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -95,7 +96,7 @@ jobs:
       - name: Package Windows executable and runtime DLLs
         run: |
           mkdir serial-network-windows
-          cp build/x16emu.exe LICENSE SERIAL-NETWORK.md build/*.tap serial-network-windows/
+          cp build/x16emu.exe LICENSE SERIAL-NETWORK.md build/*.tap packaging/README-FIRST.txt packaging/start-serial-network.bat serial-network-windows/
           cp /mingw64/bin/SDL2.dll /mingw64/bin/zlib1.dll serial-network-windows/
           for f in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
             if test -f "/mingw64/bin/$f"; then cp "/mingw64/bin/$f" serial-network-windows/; fi
@@ -105,3 +106,39 @@ jobs:
         with:
           name: serial-network-windows-x86_64
           path: serial-network-windows/*
+
+  release:
+    name: Publish tested native packages
+    if: startsWith(github.ref, 'refs/tags/serial-network-v')
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: serial-network-linux
+          path: downloads/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: serial-network-windows-x86_64
+          path: downloads/windows
+      - name: Archive binaries and calculate checksums
+        run: |
+          mkdir release-assets
+          chmod +x downloads/linux/x16emu downloads/linux/start-serial-network.sh
+          tar -czf release-assets/x16emu-serial-network-linux-x86_64.tar.gz -C downloads/linux .
+          (cd downloads/windows && zip -qr ../../release-assets/x16emu-serial-network-windows-x86_64.zip .)
+          (cd release-assets && sha256sum *.tar.gz *.zip > SHA256SUMS)
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --prerelease \
+            --title "Serial/network emulator preview ${RELEASE_TAG#serial-network-v}" \
+            --notes-file packaging/RELEASE-NOTES.md release-assets/*
