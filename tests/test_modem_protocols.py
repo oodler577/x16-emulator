@@ -121,7 +121,9 @@ class Protocols(unittest.TestCase):
         def serve(conn):
             try:
                 with self.tls.wrap_socket(conn,server_side=True): pass
-            except ssl.SSLError: pass
+            # Rejected handshakes can close with a Winsock abort/reset instead
+            # of a TLS alert. Guest-side failure and carrier are checked below.
+            except (ssl.SSLError, ConnectionAbortedError, ConnectionResetError): pass
         with Server(serve) as server:
             os.environ['X16_SERIAL_CA_FILE']=str(self.root/'missing-ca.pem')
             try:
